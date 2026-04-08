@@ -23,16 +23,16 @@
 | 组件 | 文件 | 位置 | 职责 |
 |------|------|------|------|
 | Server Plugin | `cognitive-memory/index.js` | ST 服务端 | 认知引擎核心：Embedding + LLM评估 + SQLite |
-| 前端脚本 | `cognitive-memory-extension.js` | ST 前端（TavernHelper） | 自动索引 + 认知检索注入 + 记忆浏览 |
-| 砖头机客户端 | 内置 `05v-vector.js` + `22-tavern-sync.js` | 砖头机浏览器 | 本地认知引擎 + 双向块同步 |
+| 前端脚本 | 本插件 | ST 前端（TavernHelper） | 自动索引 + 认知检索注入 + 记忆浏览 |
+| 砖头机客户端 | 已内置 | 砖头机浏览器 | 本地认知引擎 + 双向块同步 |
 
-### 传统摘要模式（兼容）
+### 旧摘要模式（兼容）
 
 | 组件 | 文件 | 位置 | 职责 |
 |------|------|------|------|
 | Server Plugin | `zhuantouji-sync/index.js` | ST 服务端 | REST API 中转站，JSON 文件存储 |
 | Bridge 脚本 | `zhuantouji-bridge.js` | ST 前端（TavernHelper） | 酒馆侧推送/拉取交互 |
-| 砖头机客户端 | 内置 `22-tavern-sync.js` | 砖头机浏览器 | 砖头机侧推送/拉取交互 |
+| 砖头机客户端 | 已内置 | 砖头机浏览器 | 砖头机侧推送/拉取交互 |
 
 ---
 
@@ -87,7 +87,7 @@ SillyTavern/data/default-user/extensions/third-party/cognitive-memory-ext/
 
 ---
 
-### 方案 B：传统摘要模式（兼容旧插件）
+### 方案 B：摘要模式（兼容旧插件）
 
 #### 第一步：安装服务端插件
 
