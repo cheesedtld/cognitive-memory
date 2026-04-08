@@ -811,24 +811,33 @@ function bindEvents() {
 
 // ============ 初始化 ============
 (async function init() {
+    try {
     const ctx = SillyTavern.getContext();
+    console.log('[CogMem] 🚀 前端扩展初始化开始...');
 
     // 检测插件
     try {
         const status = await apiCall('/status');
         pluginOnline = !!(status && (status.plugin === 'cognitive-memory' || status.status === 'ok'));
-    } catch {
+        console.log('[CogMem] 插件状态:', pluginOnline ? '在线' : '离线');
+    } catch (e) {
         pluginOnline = false;
+        console.warn('[CogMem] ⚠️ 无法连接服务端插件:', e.message);
     }
 
     // 渲染设置面板
     const { renderExtensionTemplateAsync } = ctx;
     const settingsHtml = await renderExtensionTemplateAsync('third-party/cognitive-memory-ext', 'settings');
     $('#extensions_settings2').append(settingsHtml);
+    console.log('[CogMem] ✅ 设置面板已渲染');
 
     // 填充 UI
-    populateUI();
-    bindEvents();
+    try { populateUI(); console.log('[CogMem] ✅ populateUI 完成'); }
+    catch (e) { console.error('[CogMem] ❌ populateUI 崩溃:', e); }
+
+    // 绑定事件（独立 try-catch，确保即使 populateUI 崩溃也能绑定按钮）
+    try { bindEvents(); console.log('[CogMem] ✅ bindEvents 完成'); }
+    catch (e) { console.error('[CogMem] ❌ bindEvents 崩溃:', e); }
 
     // 更新状态徽章
     const badge = document.getElementById('cogmem_status_badge');
@@ -864,4 +873,7 @@ function bindEvents() {
     refreshStats();
 
     console.log(`[CogMem] 🧠 认知记忆扩展已加载 (plugin: ${pluginOnline ? '在线' : '离线'})`);
+    } catch (fatalErr) {
+        console.error('[CogMem] ❌❌❌ 扩展初始化失败:', fatalErr);
+    }
 })();
