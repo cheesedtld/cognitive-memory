@@ -205,9 +205,49 @@
 
             <hr class="cogmem-divider" />
 
-            <!-- 诊断 -->
+            <!-- 诊断工具 -->
             <div class="cogmem-section-title">
-                <i class="fa-solid fa-stethoscope"></i> 诊断测试
+                <i class="fa-solid fa-stethoscope"></i> 调试检测
+            </div>
+
+            <!-- 逐项检测按钮 -->
+            <div class="cogmem-diag-grid">
+                <div id="cogmem_diag_plugin" class="cogmem-diag-item">
+                    <div class="cogmem-diag-icon">🔌</div>
+                    <div class="cogmem-diag-label">服务端插件</div>
+                    <div class="cogmem-diag-status" id="cogmem_diag_plugin_status">未检测</div>
+                </div>
+                <div id="cogmem_diag_emb" class="cogmem-diag-item">
+                    <div class="cogmem-diag-icon">📐</div>
+                    <div class="cogmem-diag-label">Embedding API</div>
+                    <div class="cogmem-diag-status" id="cogmem_diag_emb_status">未检测</div>
+                </div>
+                <div id="cogmem_diag_llm" class="cogmem-diag-item">
+                    <div class="cogmem-diag-icon">🧠</div>
+                    <div class="cogmem-diag-label">评估 LLM</div>
+                    <div class="cogmem-diag-status" id="cogmem_diag_llm_status">未检测</div>
+                </div>
+                <div id="cogmem_diag_db" class="cogmem-diag-item">
+                    <div class="cogmem-diag-icon">💾</div>
+                    <div class="cogmem-diag-label">记忆数据库</div>
+                    <div class="cogmem-diag-status" id="cogmem_diag_db_status">未检测</div>
+                </div>
+            </div>
+
+            <div class="cogmem-actions" style="margin-top:6px;">
+                <div id="cogmem_btn_run_diag" class="menu_button" style="grid-column:1/-1;">
+                    <i class="fa-solid fa-play"></i>
+                    <span>一键全部检测</span>
+                </div>
+            </div>
+
+            <div id="cogmem_diag_detail" class="cogmem-diag-detail"></div>
+
+            <hr class="cogmem-divider" />
+
+            <!-- 记忆搜索测试 -->
+            <div class="cogmem-section-title">
+                <i class="fa-solid fa-magnifying-glass-chart"></i> 检索测试
             </div>
             <div class="cogmem-field" style="display:flex;gap:6px;align-items:center;">
                 <input id="cogmem_diag_query" type="text" class="text_pole" placeholder="输入测试查询"
@@ -215,6 +255,14 @@
                 <div id="cogmem_btn_diag" class="menu_button" style="white-space:nowrap;padding:8px 14px;">搜索</div>
             </div>
             <div id="cogmem_diag_results" class="cogmem-diag-results"></div>
+
+            <hr class="cogmem-divider" />
+
+            <!-- 最近注入预览 -->
+            <div class="cogmem-section-title">
+                <i class="fa-solid fa-eye"></i> 最近注入预览
+            </div>
+            <div id="cogmem_last_inject" class="cogmem-inject-preview">尚未注入</div>
 
             <!-- 保存 -->
             <div class="cogmem-save-row">

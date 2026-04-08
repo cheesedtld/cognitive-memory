@@ -270,6 +270,7 @@ globalThis.cognitiveMemoryInterceptor = async function (chat, contextSize, abort
         if (!result.results || result.results.length === 0) {
             console.log('[CogMem] No memory hits.');
             lastInjectedContext = '';
+            updateInjectPreview();
             return;
         }
 
@@ -309,6 +310,9 @@ globalThis.cognitiveMemoryInterceptor = async function (chat, contextSize, abort
             }
             chat.splice(insertIdx, 0, sysMsg);
         }
+
+        // 刷新渲染
+        updateInjectPreview();
     } catch (e) {
         console.warn('[CogMem] Interceptor error:', e.message);
     }
@@ -469,6 +473,142 @@ async function syncPull() {
     } catch (e) { setActionStatus(`❌ ${e.message}`, 'error'); }
 }
 
+// ============ 调试检测 ============
+function setDiagStatus(id, text, cls) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'cogmem-diag-status ' + cls;
+}
+
+function diagLog(text) {
+    const el = document.getElementById('cogmem_diag_detail');
+    if (!el) return;
+    el.classList.add('visible');
+    el.textContent += text + '\n';
+    el.scrollTop = el.scrollHeight;
+}
+
+function diagClear() {
+    const el = document.getElementById('cogmem_diag_detail');
+    if (el) { el.textContent = ''; el.classList.remove('visible'); }
+}
+
+async function diagTestPlugin() {
+    setDiagStatus('cogmem_diag_plugin_status', '检测中…', 'testing');
+    diagLog('── 服务端插件 ──');
+    try {
+        const data = await apiCall('/diag', { method: 'POST', body: { chatTag: getChatTag(), test: 'plugin' } });
+        if (data.plugin?.ok) {
+            setDiagStatus('cogmem_diag_plugin_status', `✓ ${data.plugin.totalMemories} 条`, 'pass');
+            diagLog(`  ✓ 插件在线, 总记忆 ${data.plugin.totalMemories} 条`);
+            diagLog(`  📂 ${data.plugin.dbPath}`);
+        } else {
+            setDiagStatus('cogmem_diag_plugin_status', '✗ 错误', 'fail');
+            diagLog(`  ✗ ${data.plugin?.error || '未知错误'}`);
+        }
+    } catch (e) {
+        setDiagStatus('cogmem_diag_plugin_status', '✗ 离线', 'fail');
+        diagLog(`  ✗ 无法连接: ${e.message}`);
+    }
+}
+
+async function diagTestEmbedding() {
+    setDiagStatus('cogmem_diag_emb_status', '检测中…', 'testing');
+    diagLog('── Embedding API ──');
+    try {
+        const data = await apiCall('/diag', { method: 'POST', body: { chatTag: getChatTag(), test: 'embedding' } });
+        if (data.embedding?.ok) {
+            setDiagStatus('cogmem_diag_emb_status', `✓ ${data.embedding.latencyMs}ms`, 'pass');
+            diagLog(`  ✓ 模型: ${data.embedding.model}`);
+            diagLog(`  ✓ 维度: ${data.embedding.dimensions}`);
+            diagLog(`  ✓ 延迟: ${data.embedding.latencyMs}ms`);
+        } else if (!data.embedding?.configured) {
+            setDiagStatus('cogmem_diag_emb_status', '⚠ 未配置', 'warn');
+            diagLog('  ⚠ 未配置 Embedding API (请先填写并保存到服务端)');
+        } else {
+            setDiagStatus('cogmem_diag_emb_status', '✗ 失败', 'fail');
+            diagLog(`  ✗ ${data.embedding?.error || '请求失败'}`);
+        }
+    } catch (e) {
+        setDiagStatus('cogmem_diag_emb_status', '✗ 错误', 'fail');
+        diagLog(`  ✗ ${e.message}`);
+    }
+}
+
+async function diagTestScoring() {
+    setDiagStatus('cogmem_diag_llm_status', '检测中…', 'testing');
+    diagLog('── 评估 LLM ──');
+    try {
+        const data = await apiCall('/diag', { method: 'POST', body: { chatTag: getChatTag(), test: 'scoring' } });
+        if (data.scoring?.ok) {
+            const r = data.scoring.result;
+            setDiagStatus('cogmem_diag_llm_status', `✓ ${data.scoring.latencyMs}ms`, 'pass');
+            diagLog(`  ✓ 模型: ${data.scoring.model}`);
+            diagLog(`  ✓ 延迟: ${data.scoring.latencyMs}ms`);
+            diagLog(`  ✓ 测试评分: 重要性=${r.importance}/10, 情绪=${r.emotionType}(${r.emotionScore})`);
+            diagLog(`  ✓ 摘要: ${r.summary}`);
+            diagLog(`  ✓ 关键词: [${r.keywords?.join(', ') || '无'}]`);
+        } else if (!data.scoring?.configured) {
+            setDiagStatus('cogmem_diag_llm_status', '⚠ 未配置', 'warn');
+            diagLog('  ⚠ 评估 LLM 未配置 (将使用默认评分)');
+        } else {
+            setDiagStatus('cogmem_diag_llm_status', '✗ 失败', 'fail');
+            diagLog(`  ✗ ${data.scoring?.error || '请求失败'}`);
+        }
+    } catch (e) {
+        setDiagStatus('cogmem_diag_llm_status', '✗ 错误', 'fail');
+        diagLog(`  ✗ ${e.message}`);
+    }
+}
+
+async function diagTestDB() {
+    setDiagStatus('cogmem_diag_db_status', '检测中…', 'testing');
+    diagLog('── 记忆数据库 ──');
+    try {
+        const data = await apiCall('/diag', { method: 'POST', body: { chatTag: getChatTag(), test: 'db' } });
+        if (data.db?.ok) {
+            if (data.db.chatTag) {
+                setDiagStatus('cogmem_diag_db_status', `✓ ${data.db.total} 条`, 'pass');
+                diagLog(`  ✓ 角色: ${data.db.chatTag}`);
+                diagLog(`  ✓ 总计: ${data.db.total} | 核心: ${data.db.core || 0} | 归档: ${data.db.archived || 0}`);
+                diagLog(`  ✓ 平均重要性: ${data.db.avgImp ?? 'N/A'}`);
+            } else {
+                setDiagStatus('cogmem_diag_db_status', `✓ ${data.db.totalAll}`, 'pass');
+                diagLog(`  ✓ 全局: ${data.db.totalAll} 条 (${data.db.note})`);
+            }
+        } else {
+            setDiagStatus('cogmem_diag_db_status', '✗ 错误', 'fail');
+            diagLog(`  ✗ ${data.db?.error || '查询失败'}`);
+        }
+    } catch (e) {
+        setDiagStatus('cogmem_diag_db_status', '✗ 错误', 'fail');
+        diagLog(`  ✗ ${e.message}`);
+    }
+}
+
+async function runFullDiag() {
+    diagClear();
+    diagLog(`🔍 认知记忆诊断 — ${new Date().toLocaleString()}`);
+    diagLog(`角色: ${getCharName() || '(未选择)'}\n`);
+    await diagTestPlugin();
+    await diagTestEmbedding();
+    await diagTestScoring();
+    await diagTestDB();
+    diagLog('\n✅ 诊断完成');
+}
+
+function updateInjectPreview() {
+    const el = document.getElementById('cogmem_last_inject');
+    if (!el) return;
+    if (lastInjectedContext) {
+        el.textContent = lastInjectedContext.substring(0, 2000);
+        if (lastInjectedContext.length > 2000) el.textContent += '\n… (截断)';
+    } else {
+        el.textContent = '尚未注入';
+    }
+}
+
 // ============ 诊断搜索 ============
 async function diagSearch() {
     const q = document.getElementById('cogmem_diag_query')?.value?.trim();
@@ -620,6 +760,13 @@ function bindEvents() {
     document.getElementById('cogmem_btn_sync_pull')?.addEventListener('click', syncPull);
     document.getElementById('cogmem_btn_diag')?.addEventListener('click', diagSearch);
 
+    // 诊断按钮
+    document.getElementById('cogmem_btn_run_diag')?.addEventListener('click', runFullDiag);
+    document.getElementById('cogmem_diag_plugin')?.addEventListener('click', () => { diagClear(); diagTestPlugin(); });
+    document.getElementById('cogmem_diag_emb')?.addEventListener('click', () => { diagClear(); diagTestEmbedding(); });
+    document.getElementById('cogmem_diag_llm')?.addEventListener('click', () => { diagClear(); diagTestScoring(); });
+    document.getElementById('cogmem_diag_db')?.addEventListener('click', () => { diagClear(); diagTestDB(); });
+
     // 保存到服务端
     document.getElementById('cogmem_btn_save')?.addEventListener('click', async () => {
         try {
@@ -708,6 +855,7 @@ function bindEvents() {
         indexedMsgKeys.clear();
         lastInjectedContext = '';
         refreshStats();
+        updateInjectPreview();
     });
 
     // 自动索引（收到消息后延迟）
