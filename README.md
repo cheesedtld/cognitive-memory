@@ -38,7 +38,7 @@
 
 ## 安装步骤
 
-### 方案 A：认知记忆模式（推荐）
+### 第一步：认知记忆模式（推荐）
 
 #### 1. 安装认知记忆服务端插件
 
@@ -54,14 +54,10 @@ npm install
 
 #### 2. 安装认知记忆前端扩展
 
-将 `extensions/cognitive-memory-ext/` 文件夹复制到酒馆的扩展目录：
+将 本插件 安装到酒馆的扩展目录：
 
 ```
-SillyTavern/data/default-user/extensions/third-party/cognitive-memory-ext/
-├── manifest.json
-├── index.js
-├── settings.html
-└── style.css
+https://github.com/cheesedtld/cognitive-memory
 ```
 
 **重启酒馆**后，在「扩展 → 已安装」中可看到「🧠 认知记忆」。
@@ -87,41 +83,7 @@ SillyTavern/data/default-user/extensions/third-party/cognitive-memory-ext/
 
 ---
 
-### 方案 B：摘要模式（兼容旧插件）
-
-#### 第一步：安装服务端插件
-
-1. 进入酒馆安装目录下的 `plugins/` 文件夹
-2. 创建一个叫 `zhuantouji-sync` 的文件夹
-3. 把 `server-plugins/zhuantouji-sync/index.js` 放进去，最终路径为：
-   ```
-   SillyTavern/plugins/zhuantouji-sync/index.js
-   ```
-4. 打开酒馆根目录的 `config.yaml`，找到 `enableServerPlugins`，改为 `true`
-5. **重启酒馆**
-6. 看到控制台输出 `[ZTJ-Sync] 🔗 砖头机同步插件已加载！` 即成功
-
-> 也可以用命令行安装：
-> ```bash
-> cd SillyTavern/plugins
-> git clone https://github.com/cheesedtld/SillyTavern-Server-Plugin-Zhuantouji-Sync.git zhuantouji-sync
-> ```
-
-### 第二步：安装酒馆助手脚本
-
-**方式一：导入 JSON（推荐）**
-1. 在酒馆中打开**酒馆助手**（TavernHelper / JS-Slash-Runner）
-2. 进入脚本库 → 导入
-3. 选择 `legacy-tavern-helper-scripts/酒馆助手脚本-砖头机同步桥接.json` 文件导入
-4. 确认脚本已启用
-
-**方式二：手动创建**
-1. 在酒馆助手中进入脚本库 → 新建空脚本
-2. 脚本命名为「砖头机同步桥接」
-3. 把 `legacy-tavern-helper-scripts/zhuantouji-bridge.js` 的内容全部复制粘贴进脚本编辑器
-4. 保存并启用脚本
-
-### 第三步：配置砖头机
+### 第二步：配置砖头机
 
 1. 打开砖头机 → 进入任意聊天 → 聊天设置 → 记忆设置
 2. 找到「酒馆同步 (SillyTavern)」区块
