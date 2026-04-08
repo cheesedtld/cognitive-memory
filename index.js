@@ -659,32 +659,37 @@ async function refreshStats() {
 // ============ UI ↔ Settings 双向绑定 ============
 function populateUI() {
     const s = getSettings();
-    const el = id => document.getElementById(id);
+    const set = (id, prop, val) => {
+        const e = document.getElementById(id);
+        if (!e) return;
+        if (prop === 'checked') e.checked = val;
+        else e.value = val;
+    };
 
-    el('cogmem_enabled').checked = s.enabled;
-    el('cogmem_auto_index').checked = s.autoIndex;
-    el('cogmem_auto_inject').checked = s.autoInject;
-    el('cogmem_emb_endpoint').value = s.embEndpoint;
-    el('cogmem_emb_key').value = s.embKey;
-    el('cogmem_emb_model').value = s.embModel;
-    el('cogmem_score_endpoint').value = s.scoreEndpoint;
-    el('cogmem_score_key').value = s.scoreKey;
-    el('cogmem_score_model').value = s.scoreModel;
-    el('cogmem_topk').value = s.topK;
-    el('cogmem_chunk_chars').value = s.chunkChars;
-    el('cogmem_chunk_msgs').value = s.chunkMsgs;
-    el('cogmem_keep_recent').value = s.keepRecent;
+    set('cogmem_enabled', 'checked', s.enabled);
+    set('cogmem_auto_index', 'checked', s.autoIndex);
+    set('cogmem_auto_inject', 'checked', s.autoInject);
+    set('cogmem_emb_endpoint', 'value', s.embEndpoint);
+    set('cogmem_emb_key', 'value', s.embKey);
+    set('cogmem_emb_model', 'value', s.embModel);
+    set('cogmem_score_endpoint', 'value', s.scoreEndpoint);
+    set('cogmem_score_key', 'value', s.scoreKey);
+    set('cogmem_score_model', 'value', s.scoreModel);
+    set('cogmem_topk', 'value', s.topK);
+    set('cogmem_chunk_chars', 'value', s.chunkChars);
+    set('cogmem_chunk_msgs', 'value', s.chunkMsgs);
+    set('cogmem_keep_recent', 'value', s.keepRecent);
     // 分块模式单选
     const chunkRadios = document.querySelectorAll('input[name="cogmem_chunk_mode"]');
     chunkRadios.forEach(r => { r.checked = r.value === s.chunkMode; });
 
-    el('cogmem_w_relevance').value = s.wRelevance;
-    el('cogmem_w_recency').value = s.wRecency;
-    el('cogmem_w_importance').value = s.wImportance;
-    el('cogmem_decay_rate').value = s.decayRate;
+    set('cogmem_w_relevance', 'value', s.wRelevance);
+    set('cogmem_w_recency', 'value', s.wRecency);
+    set('cogmem_w_importance', 'value', s.wImportance);
+    set('cogmem_decay_rate', 'value', s.decayRate);
 
-    el('cogmem_inject_template').value = s.injectTemplate;
-    el('cogmem_inject_depth').value = s.injectDepth;
+    set('cogmem_inject_template', 'value', s.injectTemplate);
+    set('cogmem_inject_depth', 'value', s.injectDepth);
     // 设置单选按钮
     const radios = document.querySelectorAll('input[name="cogmem_inject_pos"]');
     radios.forEach(r => { r.checked = r.value === s.injectPosition; });
