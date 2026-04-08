@@ -102,18 +102,59 @@
     box-sizing: border-box;
 }
 
+/* API 配置标签页 */
+.cogmem-api-tabs {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 10px;
+    background: var(--SmartThemeBlurTintColor, rgba(128,128,128,0.1));
+    padding: 3px;
+    border-radius: 8px;
+}
+.cogmem-api-tab {
+    flex: 1;
+    text-align: center;
+    padding: 6px 0;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--SmartThemeBodyColor, #ccc);
+    opacity: 0.6;
+    transition: all 0.2s ease;
+}
+.cogmem-api-tab.active {
+    background: var(--SmartThemeBlurTintColor, rgba(128,128,128,0.2));
+    opacity: 1;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+.cogmem-api-content {
+    display: none;
+}
+.cogmem-api-content.active {
+    display: block;
+    animation: cogmemTabFadeIn 0.2s ease;
+}
+@keyframes cogmemTabFadeIn {
+    from { opacity: 0; transform: translateY(-2px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
 /* 内联字段 */
 .cogmem-field-inline {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin: 4px 0;
+    margin: 4px 0 2px 0;
     gap: 8px;
 }
 .cogmem-field-inline label {
     font-size: 12px;
     opacity: 0.7;
     white-space: nowrap;
+}
+.cogmem-field-inline input {
+    margin: 0 !important; /* 防止酒馆原生输入框 margin 把间距撑大 */
 }
 .cogmem-narrow {
     width: 70px !important;
@@ -183,8 +224,8 @@
 .cogmem-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 6px;
-    margin: 6px 0;
+    gap: 8px;
+    margin: 8px 0;
 }
 .cogmem-actions .menu_button {
     display: flex;
@@ -193,11 +234,13 @@
     justify-content: center;
     gap: 6px;
     padding: 8px 10px;
+    margin: 0 !important; /* 防止酒馆原生 margin 撑破网格导致分散 */
     font-size: 12px;
     border-radius: 6px;
     cursor: pointer;
     white-space: nowrap;
     min-height: 36px;
+    box-sizing: border-box;
 }
 .cogmem-actions .menu_button i {
     font-size: 11px;
@@ -206,7 +249,7 @@
 /* 操作状态 */
 .cogmem-action-status {
     font-size: 11px;
-    color: var(--SmartThemeBodyColor);
+    color: var(--SmartThemeBodyColor, #ccc);
     opacity: 0.6;
     min-height: 18px;
     text-align: center;
@@ -219,7 +262,7 @@
 /* 诊断结果 */
 .cogmem-diag-results {
     font-size: 12px;
-    color: var(--SmartThemeBodyColor);
+    color: var(--SmartThemeBodyColor, #ccc);
     line-height: 1.6;
     max-height: 200px;
     overflow-y: auto;
@@ -230,23 +273,25 @@
 .cogmem-diag-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 6px;
-    margin: 6px 0;
+    gap: 8px;
+    margin: 8px 0;
 }
 .cogmem-diag-item {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 3px;
-    padding: 8px 6px;
+    gap: 4px;
+    padding: 10px 6px;
     border-radius: 8px;
-    background: var(--SmartThemeBlurTintColor);
-    border: 1px solid var(--SmartThemeBorderColor);
+    background: var(--SmartThemeBlurTintColor, rgba(128,128,128,0.1));
+    border: 1px solid var(--SmartThemeBorderColor, rgba(128,128,128,0.2));
     cursor: pointer;
     transition: all 0.2s ease;
+    box-sizing: border-box;
 }
 .cogmem-diag-item:hover {
-    box-shadow: 0 1px 6px rgba(0,0,0,0.1);
+    box-shadow: 0 1px 6px rgba(0,0,0,0.15);
+    background: var(--SmartThemeBlurTintColor, rgba(128,128,128,0.15));
 }
 .cogmem-diag-icon {
     font-size: 18px;
