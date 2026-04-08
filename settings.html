@@ -1,7 +1,7 @@
 <div id="cogmem_settings">
     <div class="inline-drawer">
         <div class="inline-drawer-toggle inline-drawer-header">
-            <b>🧠 认知记忆</b>
+            <b>向量认知记忆</b>
             <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
         </div>
         <div class="inline-drawer-content">
@@ -71,19 +71,22 @@
                     gap: 8px !important;
                     margin: 8px 0 !important;
                 }
+
                 .cogmem-actions .menu_button {
                     margin: 0 !important;
                     box-sizing: border-box !important;
                 }
+
                 .cogmem-diag-grid {
                     display: grid !important;
                     grid-template-columns: 1fr 1fr !important;
                     gap: 8px !important;
                     margin: 8px 0 !important;
                 }
+
                 .cogmem-diag-item {
-                    background: var(--SmartThemeBlurTintColor, rgba(128,128,128,0.1)) !important;
-                    border: 1px solid var(--SmartThemeBorderColor, rgba(128,128,128,0.2)) !important;
+                    background: var(--SmartThemeBlurTintColor, rgba(128, 128, 128, 0.1)) !important;
+                    border: 1px solid var(--SmartThemeBorderColor, rgba(128, 128, 128, 0.2)) !important;
                     box-sizing: border-box !important;
                     cursor: pointer !important;
                     touch-action: manipulation !important;
@@ -98,12 +101,15 @@
                     min-height: 50px !important;
                     height: auto !important;
                 }
+
                 .cogmem-diag-item:hover {
-                    background: var(--SmartThemeBlurTintColor, rgba(128,128,128,0.15)) !important;
+                    background: var(--SmartThemeBlurTintColor, rgba(128, 128, 128, 0.15)) !important;
                 }
+
                 .cogmem-diag-item * {
                     pointer-events: none !important;
                 }
+
                 .cogmem-field-inline input {
                     margin: 0 !important;
                 }
@@ -115,15 +121,18 @@
             </div>
             <div class="cogmem-field-inline">
                 <label for="cogmem_w_relevance">语义相关 (%)</label>
-                <input id="cogmem_w_relevance" type="number" class="text_pole cogmem-narrow" min="0" max="100" step="5" value="50" />
+                <input id="cogmem_w_relevance" type="number" class="text_pole cogmem-narrow" min="0" max="100" step="5"
+                    value="50" />
             </div>
             <div class="cogmem-field-inline">
                 <label for="cogmem_w_recency">时间近因 (%)</label>
-                <input id="cogmem_w_recency" type="number" class="text_pole cogmem-narrow" min="0" max="100" step="5" value="30" />
+                <input id="cogmem_w_recency" type="number" class="text_pole cogmem-narrow" min="0" max="100" step="5"
+                    value="30" />
             </div>
             <div class="cogmem-field-inline">
                 <label for="cogmem_w_importance">重要程度 (%)</label>
-                <input id="cogmem_w_importance" type="number" class="text_pole cogmem-narrow" min="0" max="100" step="5" value="20" />
+                <input id="cogmem_w_importance" type="number" class="text_pole cogmem-narrow" min="0" max="100" step="5"
+                    value="20" />
             </div>
             <small class="cogmem-hint">三个权重控制检索排序策略。总和不必为100%，系统会自动归一化。</small>
 
@@ -202,7 +211,8 @@
             <small class="cogmem-hint">最近 N 条消息不索引（它们在上下文窗口里）。</small>
             <div class="cogmem-field-inline">
                 <label for="cogmem_decay_rate">衰减速率 (×0.01/h)</label>
-                <input id="cogmem_decay_rate" type="number" class="text_pole cogmem-narrow" min="0" max="100" step="1" value="1" />
+                <input id="cogmem_decay_rate" type="number" class="text_pole cogmem-narrow" min="0" max="100" step="1"
+                    value="1" />
             </div>
             <small class="cogmem-hint">衰减基于现实时间（非剧情时间）。0=永不遗忘 · 0.01≈现实3天半衰期 · 0.05≈现实14小时。被提起的记忆会自动加深。</small>
 
