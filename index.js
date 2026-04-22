@@ -13,7 +13,7 @@ const MODULE_NAME = 'cognitive_memory';
 const COG_API = '/api/plugins/cognitive-memory';
 
 const VIVIDNESS_LABELS = { deep: '深刻', clear: '清晰', fading: '褪色', vague: '模糊' };
-const EMOTION_EMOJI = { joy: '😊', love: '💕', sadness: '😢', anger: '😠', fear: '😰', surprise: '😲', neutral: '' };
+const EMOTION_EMOJI = {}; // deprecated: cognitive scoring no longer returns emotionType
 
 // ============ 默认设置 ============
 const DEFAULT_SETTINGS = Object.freeze({
@@ -33,7 +33,7 @@ const DEFAULT_SETTINGS = Object.freeze({
     chunkMode: 'chars',
     chunkChars: 1000,
     chunkMsgs: 5,
-    keepRecent: 10,
+    keepRecent: 25,
     decayRate: 1,
     injectTemplate: '[角色记忆 — 认知检索]\n以下是你自然想起的过往经历，按印象深浅排列。这些是已经发生过的事，请视为你自己的记忆：\n\n{{text}}',
     injectPosition: 'after',
@@ -231,15 +231,14 @@ function buildInjectionContext(searchResult) {
 
     for (const mem of (searchResult.results || [])) {
         const time = formatTimeAgo(mem.timestamp);
-        const emoji = EMOTION_EMOJI[mem.emotionType] || '';
         const label = VIVIDNESS_LABELS[mem.vividness] || '记忆';
 
         if (mem.vividness === 'deep' || mem.vividness === 'clear') {
-            memoryText += `[${label} · ${time}${emoji ? ' ' + emoji : ''}]\n${mem.text}\n---\n`;
+            memoryText += `[${label} · ${time}]\n${mem.text}\n---\n`;
         } else if (mem.vividness === 'fading') {
-            memoryText += `[${label} · ${time}] ${mem.summary || mem.text.substring(0, 100)}\n---\n`;
+            memoryText += `[${label} · ${time}] ${mem.text.substring(0, 100)}\n---\n`;
         } else {
-            memoryText += `[${label}] ${mem.summary || mem.text.substring(0, 50)}\n`;
+            memoryText += `[${label}] ${mem.text.substring(0, 50)}\n`;
         }
     }
 
@@ -435,7 +434,7 @@ async function openMemoryBrowser() {
             html += `<span>${emoji} ${mem.summary || (mem.text || '').substring(0, 40) + '…'} ${coreTag}</span>`;
             html += `<span class="cogmem-mem-time">${timeStr}</span>`;
             html += `</div>`;
-            html += `<div class="cogmem-mem-meta">重要性 ${impBar} ${mem.importance}/10 · ${mem.emotionType} · 提起 ${mem.accessCount} 次</div>`;
+            html += `<div class="cogmem-mem-meta">重要性 ${impBar} ${mem.importance}/10 · 回忆 ${mem.accessCount || 0} 次</div>`;
 
             if (mem.keywords && mem.keywords.length > 0) {
                 html += `<div class="cogmem-mem-keywords">${mem.keywords.map(k => `<span class="cogmem-mem-kw-tag">${k}</span>`).join('')}</div>`;
@@ -796,6 +795,109 @@ function bindEvents() {
     document.getElementById('cogmem_diag_emb')?.addEventListener('click', () => { diagClear(); diagTestEmbedding(); });
     document.getElementById('cogmem_diag_llm')?.addEventListener('click', () => { diagClear(); diagTestScoring(); });
     document.getElementById('cogmem_diag_db')?.addEventListener('click', () => { diagClear(); diagTestDB(); });
+
+    // 拉取 API 设置按钮 (从输入的 Endpoint 获取模型列表)
+    document.getElementById('cogmem_btn_pull_emb')?.addEventListener('click', async () => {
+        try {
+            const eEl = document.getElementById('cogmem_emb_endpoint');
+            const kEl = document.getElementById('cogmem_emb_key');
+            let endpoint = (eEl?.value || '').trim();
+            const key = (kEl?.value || '').trim();
+            
+            if (!endpoint) { toastr.warning('请先输入 Embedding API 地址'); return; }
+            if (endpoint.endsWith('/v1/chat/completions') || endpoint.endsWith('/v1/embeddings')) {
+                endpoint = endpoint.replace(/\/(chat\/completions|embeddings)$/, '');
+            }
+            if (endpoint.endsWith('/v1')) {
+                endpoint = endpoint.replace(/\/v1$/, '');
+            }
+            
+            const originalBtnText = document.getElementById('cogmem_btn_pull_emb').innerHTML;
+            document.getElementById('cogmem_btn_pull_emb').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 拉取中...';
+            
+            try {
+                const res = await fetch(`${endpoint}/v1/models`, {
+                    headers: { 'Authorization': `Bearer ${key}` }
+                });
+                
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                
+                const models = Array.isArray(data) ? data : (data.data || []);
+                const datalist = document.getElementById('cogmem_emb_model_list');
+                if (datalist) {
+                    datalist.innerHTML = '';
+                    models.forEach(m => {
+                        const id = m.id || m.name || m;
+                        if (typeof id === 'string') {
+                            const option = document.createElement('option');
+                            option.value = id;
+                            datalist.appendChild(option);
+                        }
+                    });
+                }
+                toastr.success(`成功拉取 ${models.length} 个模型，请在输入框下拉选择`);
+            } finally {
+                document.getElementById('cogmem_btn_pull_emb').innerHTML = originalBtnText;
+            }
+        } catch (e) { toastr.error(`拉取模型失败: ${e.message}`); }
+    });
+
+    document.getElementById('cogmem_btn_pull_score')?.addEventListener('click', async () => {
+        try {
+            const eEl = document.getElementById('cogmem_score_endpoint');
+            const kEl = document.getElementById('cogmem_score_key');
+            
+            let endpoint = (eEl?.value || '').trim();
+            const key = (kEl?.value || '').trim();
+            
+            if (!endpoint) {
+                // 如果为空，尝试使用 Embedding 的地址
+                endpoint = (document.getElementById('cogmem_emb_endpoint')?.value || '').trim();
+                if (!endpoint) {
+                    toastr.warning('请先输入评估 LLM (或 Embedding) API 地址'); return;
+                }
+            }
+            
+            if (endpoint.endsWith('/v1/chat/completions') || endpoint.endsWith('/v1/embeddings')) {
+                endpoint = endpoint.replace(/\/(chat\/completions|embeddings)$/, '');
+            }
+            if (endpoint.endsWith('/v1')) {
+                endpoint = endpoint.replace(/\/v1$/, '');
+            }
+            
+            const reqKey = key || (document.getElementById('cogmem_emb_key')?.value || '').trim();
+            
+            const originalBtnText = document.getElementById('cogmem_btn_pull_score').innerHTML;
+            document.getElementById('cogmem_btn_pull_score').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 拉取中...';
+            
+            try {
+                const res = await fetch(`${endpoint}/v1/models`, {
+                    headers: { 'Authorization': `Bearer ${reqKey}` }
+                });
+                
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                
+                const models = Array.isArray(data) ? data : (data.data || []);
+                const datalist = document.getElementById('cogmem_score_model_list');
+                if (datalist) {
+                    datalist.innerHTML = '';
+                    models.forEach(m => {
+                        const id = m.id || m.name || m;
+                        if (typeof id === 'string') {
+                            const option = document.createElement('option');
+                            option.value = id;
+                            datalist.appendChild(option);
+                        }
+                    });
+                }
+                toastr.success(`成功拉取 ${models.length} 个模型，请在输入框下拉选择`);
+            } finally {
+                document.getElementById('cogmem_btn_pull_score').innerHTML = originalBtnText;
+            }
+        } catch (e) { toastr.error(`拉取模型失败: ${e.message}`); }
+    });
 
     // 保存到服务端
     document.getElementById('cogmem_btn_save')?.addEventListener('click', async () => {
