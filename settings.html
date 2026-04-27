@@ -27,24 +27,30 @@
 
             <!-- 操作按钮 -->
             <div class="cogmem-section-title">
-                <i class="fa-solid fa-wrench"></i> 操作
+                <i class="fa-solid fa-comments"></i> 我使用的是聊天总结法
             </div>
             <div class="cogmem-actions">
-                <div id="cogmem_btn_sync_push" class="menu_button">
+                <div id="cogmem_btn_push_trad" class="menu_button">
                     <i class="fa-solid fa-arrow-up"></i>
-                    <span>生成 ST 总结推砖头机</span>
+                    <span>ST 总结推送</span>
                 </div>
-                
-                <div class="cogmem-toggle-row" style="grid-column: 1 / -1; margin-top: -5px; margin-bottom: 5px;">
-                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:12px;">
-                        <input type="checkbox" id="cogmem_sync_as_vector" checked />
-                        作为分享卡片推送 (在砖头机端展示并进行打标)
-                    </label>
-                </div>
-
-                <div id="cogmem_btn_sync_pull" class="menu_button" style="grid-column: 1 / -1;">
+                <div id="cogmem_btn_pull_trad" class="menu_button">
                     <i class="fa-solid fa-arrow-down"></i>
-                    <span>拉取砖头机事件日记</span>
+                    <span>拉取砖头机总结</span>
+                </div>
+            </div>
+
+            <div class="cogmem-section-title" style="margin-top: 15px;">
+                <i class="fa-solid fa-bolt"></i> 我使用的是事件向量法
+            </div>
+            <div class="cogmem-actions">
+                <div id="cogmem_btn_push_vec" class="menu_button">
+                    <i class="fa-solid fa-arrow-up"></i>
+                    <span>ST 总结推送</span>
+                </div>
+                <div id="cogmem_btn_pull_vec" class="menu_button">
+                    <i class="fa-solid fa-arrow-down"></i>
+                    <span>拉取砖头机日记</span>
                 </div>
             </div>
             <div id="cogmem_action_status" class="cogmem-action-status"></div>
