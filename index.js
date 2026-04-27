@@ -574,9 +574,9 @@ globalThis.cogMemDelete = async function (id) {
 };
 
 // ============ 操作：砖头机同步 ============
-async function syncPush() {
+async function doSyncPush(asVector) {
     const charName = getCharName();
-    if (!charName) { toastr.warning('请先打开角色聊天'); return; }
+    if (!charName) { setActionStatus('请先打开角色聊天', 'error'); return; }
 
     const userName = SillyTavern.getContext().name1 || 'User';
     const characterName = SillyTavern.getContext().name2 || charName;
@@ -587,7 +587,7 @@ async function syncPush() {
         const lastId = typeof getLastMessageId === 'function' ? getLastMessageId() : 0;
         messages = getChatMessages(`0-${lastId}`);
     }
-    if (!messages || messages.length === 0) { toastr.warning('当前聊天没有消息'); return; }
+    if (!messages || messages.length === 0) { setActionStatus('当前聊天没有消息', 'error'); return; }
 
     let startIndex = 0;
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -644,7 +644,7 @@ ${chatText}
 只输出以上六个板块的内容，千万不要添加开头和结尾的额外寒暄说明文字。`;
 
     try {
-        toastr.info('正在生成酒馆总结，请稍候...', '主动向量记忆');
+        setActionStatus('正在生成总结，请稍候...', 'info');
         const summary = await window.generateRaw({
             user_input: summaryPrompt,
             should_silence: true,
@@ -654,8 +654,6 @@ ${chatText}
         });
 
         if (!summary || !summary.trim()) throw new Error('摘要生成失败：返回为空');
-
-        const asVector = document.getElementById('cogmem_sync_as_vector')?.checked ?? true;
         
         if (asVector) {
             const memoryEntry = {
@@ -704,36 +702,36 @@ ${chatText}
     }
 }
 
-async function syncPull() {
+async function syncPullTrad() {
     const charName = getCharName();
-    if (!charName) { toastr.warning('请先打开角色聊天'); return; }
+    if (!charName) { setActionStatus('请先打开角色聊天', 'error'); return; }
     try {
-        let pulledSomething = false;
-        
-        // 1. 从旧插件拉取传统记忆
-        try {
-            const fetchOptions = { headers: SillyTavern.getRequestHeaders() };
-            const res = await fetch(`/api/plugins/zhuantouji-sync/pull?char=${encodeURIComponent(charName)}&source=ztj`, fetchOptions);
-            if (res.ok) {
-                const result = await res.json();
-                if (result.memories && result.memories.length > 0) {
-                    let injectContent = '<details>\n<summary>📱 <b>点击展开：从砖头机同步的线上聊天前情</b></summary>\n\n';
-                    result.memories.forEach((mem, i) => {
-                        injectContent += `[线上记忆${i + 1}: ${mem.t || '日常聊天'}]\n${mem.c || ''}\n\n`;
-                    });
-                    injectContent += '</details>\n\n*(系统提示：双方已结束线上交流，正式切换为线下见面/现实互动模式。请结合上方的前情摘要，自然流畅地展开接下来的剧情。)*';
-                    
-                    if (typeof createChatMessages === 'function') {
-                        await createChatMessages([{ role: 'system', message: injectContent }]);
-                    }
-                    pulledSomething = true;
+        const fetchOptions = { headers: SillyTavern.getRequestHeaders() };
+        const res = await fetch(`/api/plugins/zhuantouji-sync/pull?char=${encodeURIComponent(charName)}&source=ztj`, fetchOptions);
+        if (res.ok) {
+            const result = await res.json();
+            if (result.memories && result.memories.length > 0) {
+                let injectContent = '<details>\n<summary>📱 <b>点击展开：从砖头机同步的线上聊天前情</b></summary>\n\n';
+                result.memories.forEach((mem, i) => {
+                    injectContent += `[线上记忆${i + 1}: ${mem.t || '日常聊天'}]\n${mem.c || ''}\n\n`;
+                });
+                injectContent += '</details>\n\n*(系统提示：双方已结束线上交流，正式切换为线下见面/现实互动模式。请结合上方的前情摘要，自然流畅地展开接下来的剧情。)*';
+                
+                if (typeof createChatMessages === 'function') {
+                    await createChatMessages([{ role: 'system', message: injectContent }]);
                 }
+                setActionStatus(`✅ 成功拉取砖头机总结并插入背景！`, 'success');
+            } else {
+                setActionStatus('暂无来自砖头机的新聊天总结', '');
             }
-        } catch (e) {
-            console.warn('[CogMem] 传统拉取失败 (可忽略)', e);
         }
+    } catch (e) { setActionStatus(`❌ 传统拉取失败: ${e.message}`, 'error'); }
+}
 
-        // 2. 从后端拉取砖头机产生的 card_ztj_ 记录 (向量日记卡片)
+async function syncPullVec() {
+    const charName = getCharName();
+    if (!charName) { setActionStatus('请先打开角色聊天', 'error'); return; }
+    try {
         const syncChatTag = `chat:${charName}`;
         const data = await apiCall(`/memories?chatTag=${encodeURIComponent(syncChatTag)}&limit=1000`);
         const cards = (data?.memories || []).filter(m => m.id && m.id.startsWith('card_ztj_') && !m.isArchived);
@@ -756,16 +754,11 @@ async function syncPull() {
             if (typeof createChatMessages === 'function') {
                 await createChatMessages([{ role: 'system', message: injectContent }]);
             }
-            pulledSomething = true;
-        }
-
-        if (pulledSomething) {
-            setActionStatus(`✅ 成功拉取砖头机记忆并插入背景！`, 'success');
-            refreshStats();
+            setActionStatus(`✅ 成功拉取砖头机日记卡片并插入背景！`, 'success');
         } else {
-            setActionStatus('暂无来自砖头机的新前情记录', '');
+            setActionStatus('暂无来自砖头机的未读日记卡片', '');
         }
-    } catch (e) { setActionStatus(`❌ ${e.message}`, 'error'); }
+    } catch (e) { setActionStatus(`❌ 向量拉取失败: ${e.message}`, 'error'); }
 }
 
 
@@ -958,8 +951,10 @@ function populateUI() {
 
 function bindEvents() {
     // 按钮
-    document.getElementById('cogmem_btn_sync_push')?.addEventListener('click', syncPush);
-    document.getElementById('cogmem_btn_sync_pull')?.addEventListener('click', syncPull);
+    document.getElementById('cogmem_btn_push_trad')?.addEventListener('click', () => doSyncPush(false));
+    document.getElementById('cogmem_btn_pull_trad')?.addEventListener('click', syncPullTrad);
+    document.getElementById('cogmem_btn_push_vec')?.addEventListener('click', () => doSyncPush(true));
+    document.getElementById('cogmem_btn_pull_vec')?.addEventListener('click', syncPullVec);
 }
 
 // ============ 初始化 ============
@@ -996,11 +991,11 @@ function bindEvents() {
         const badge = document.getElementById('cogmem_status_badge');
         if (badge) {
             if (pluginOnline) {
-                badge.textContent = '在线';
-                badge.className = 'cogmem-badge cogmem-badge-on';
+                badge.textContent = '服务器已连接';
+                badge.style.background = '#28a745';
             } else {
-                badge.textContent = '离线';
-                badge.className = 'cogmem-badge cogmem-badge-off';
+                badge.textContent = '未连接服务器';
+                badge.style.background = '#dc3545';
             }
         }
 
