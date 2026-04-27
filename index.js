@@ -70,27 +70,42 @@ async function doSyncPush(asVector) {
 
     // 1. 获取聊天消息并找到上次节点
     let messages = [];
-    if (typeof getChatMessages === 'function') {
-        const lastId = typeof getLastMessageId === 'function' ? getLastMessageId() : 0;
-        messages = getChatMessages(`0-${lastId}`);
+    try {
+        if (typeof getChatMessages === 'function') {
+            const lastId = typeof getLastMessageId === 'function' ? getLastMessageId() : 0;
+            messages = getChatMessages(`0-${lastId}`);
+        }
+    } catch (e) { console.warn(e); }
+
+    if (!messages || messages.length === 0) {
+        const ctx = SillyTavern.getContext();
+        if (ctx.chat && ctx.chat.length > 0) {
+            messages = ctx.chat;
+        } else if (typeof chat !== 'undefined' && chat.length > 0) {
+            messages = chat;
+        }
     }
-    if (!messages || messages.length === 0) { setActionStatus('当前聊天没有消息', 'error'); return; }
+
+    if (!messages || messages.length === 0) { 
+        setActionStatus(`未找到对话记录 (请确认是否进入了聊天界面)`, 'error'); 
+        return; 
+    }
 
     let startIndex = 0;
     for (let i = messages.length - 1; i >= 0; i--) {
-        const msgText = messages[i].message || '';
-        if (msgText.includes('正式切换为线下见面/现实互动模式') || msgText.includes('已同步到砖头机：线下记忆摘要')) {
+        const msgText = messages[i].mes || messages[i].message || '';
+        if (msgText.includes('正式切换为线下见面/现实互动模式') || msgText.includes('已同步到砖头机：线下记忆摘要') || msgText.includes('已同步到砖头机：线下卡片')) {
             startIndex = i + 1;
             break;
         }
     }
-    messages = messages.slice(startIndex);
-    if (messages.length === 0) { setActionStatus('上次同步后暂无新内容', ''); return; }
+    messages = messages.slice(startIndex).filter(m => m.is_user !== undefined && !m.is_system);
+    if (messages.length === 0) { setActionStatus('上次同步后暂无新聊天内容', 'error'); return; }
 
     let chatText = '';
     messages.forEach(msg => {
         const sender = msg.is_user ? userName : characterName;
-        const content = (msg.message || '').substring(0, 800);
+        const content = (msg.mes || msg.message || '').substring(0, 800);
         chatText += `${sender}: ${content}\n`;
     });
     if (chatText.length > 25000) chatText = '...(前面的内容已省略)\n' + chatText.slice(-25000);
@@ -132,13 +147,39 @@ ${chatText}
 
     try {
         setActionStatus('正在生成总结，请稍候...', 'info');
-        const summary = await window.generateRaw({
-            user_input: summaryPrompt,
-            should_silence: true,
-            max_chat_history: 0,
-            max_tokens: 4096,
-            ordered_prompts: ['user_input']
-        });
+        
+        let loadingPopup = null;
+        if (typeof SillyTavern !== 'undefined' && SillyTavern.Popup) {
+            loadingPopup = new SillyTavern.Popup(
+                '🧠 正在呼叫 AI 生成故事总结，请稍候...',
+                SillyTavern.POPUP_TYPE.TEXT,
+                null,
+                { okButton: false, cancelButton: false }
+            );
+            loadingPopup.show();
+        }
+        let summary = '';
+        if (typeof generateRaw === 'function') {
+            summary = await generateRaw({
+                user_input: summaryPrompt,
+                should_silence: true,
+                max_chat_history: 0,
+                max_tokens: 4096,
+                ordered_prompts: ['user_input']
+            });
+        } else if (typeof SillyTavern !== 'undefined' && typeof SillyTavern.getContext().generateRaw === 'function') {
+            summary = await SillyTavern.getContext().generateRaw({
+                user_input: summaryPrompt,
+                should_silence: true,
+                max_chat_history: 0,
+                max_tokens: 4096,
+                ordered_prompts: ['user_input']
+            });
+        } else {
+            throw new Error('未找到 generateRaw 接口，可能酒馆版本不兼容');
+        }
+
+        if (loadingPopup) loadingPopup.completeAffirmative();
 
         if (!summary || !summary.trim()) throw new Error('摘要生成失败：返回为空');
         
@@ -160,7 +201,10 @@ ${chatText}
             const summaryMessage = `<details>\n<summary>📱 <b>已同步到砖头机：线下卡片 (触发打标)</b></summary>\n\n${summary.trim()}\n\n</details>\n\n*(系统提示：以上线下互动记忆已同步至砖头机并打标为核心向量，线上聊天时角色会自然地体现对这些经历的了解。)*`;
             if (typeof createChatMessages === 'function') {
                 await createChatMessages([{ role: 'system', message: summaryMessage }]);
+            } else if (typeof SillyTavern !== 'undefined' && typeof SillyTavern.getContext().createChatMessages === 'function') {
+                await SillyTavern.getContext().createChatMessages([{ role: 'system', message: summaryMessage }]);
             }
+            if (typeof toastr !== 'undefined') toastr.success('✅ 卡片生成完毕并推送为向量！');
             setActionStatus(`✅ 成功生成剧情总结并推送为向量卡片！`, 'success');
         } else {
             // 推送到传统的 zhuantouji-sync 后端
@@ -181,10 +225,17 @@ ${chatText}
             const summaryMessage = `<details>\n<summary>📱 <b>已同步到砖头机：线下记忆摘要 (纯总结)</b></summary>\n\n${summary.trim()}\n\n</details>\n\n*(系统提示：以上线下互动记忆已同步至砖头机的记忆列表，线上聊天时角色会自然地体现对这些经历的了解。)*`;
             if (typeof createChatMessages === 'function') {
                 await createChatMessages([{ role: 'system', message: summaryMessage }]);
+            } else if (typeof SillyTavern !== 'undefined' && typeof SillyTavern.getContext().createChatMessages === 'function') {
+                await SillyTavern.getContext().createChatMessages([{ role: 'system', message: summaryMessage }]);
             }
+            if (typeof toastr !== 'undefined') toastr.success('✅ 总结生成完毕并同步！');
             setActionStatus(`✅ 成功生成剧情总结并推送到记忆列表！`, 'success');
         }
     } catch (e) {
+        if (typeof loadingPopup !== 'undefined' && loadingPopup) {
+            try { loadingPopup.completeAffirmative(); } catch (err) {}
+        }
+        if (typeof toastr !== 'undefined') toastr.error(`❌ 同步失败: ${e.message}`);
         setActionStatus(`❌ ${e.message}`, 'error');
     }
 }
@@ -206,7 +257,10 @@ async function syncPullTrad() {
                 
                 if (typeof createChatMessages === 'function') {
                     await createChatMessages([{ role: 'system', message: injectContent }]);
+                } else if (typeof SillyTavern !== 'undefined' && typeof SillyTavern.getContext().createChatMessages === 'function') {
+                    await SillyTavern.getContext().createChatMessages([{ role: 'system', message: injectContent }]);
                 }
+                if (typeof toastr !== 'undefined') toastr.success('✅ 拉取成功，已插入背景！');
                 setActionStatus(`✅ 成功拉取砖头机总结并插入背景！`, 'success');
             } else {
                 setActionStatus('暂无来自砖头机的新聊天总结', '');
@@ -240,7 +294,10 @@ async function syncPullVec() {
 
             if (typeof createChatMessages === 'function') {
                 await createChatMessages([{ role: 'system', message: injectContent }]);
+            } else if (typeof SillyTavern !== 'undefined' && typeof SillyTavern.getContext().createChatMessages === 'function') {
+                await SillyTavern.getContext().createChatMessages([{ role: 'system', message: injectContent }]);
             }
+            if (typeof toastr !== 'undefined') toastr.success('✅ 拉取成功，已插入日记卡片！');
             setActionStatus(`✅ 成功拉取砖头机日记卡片并插入背景！`, 'success');
         } else {
             setActionStatus('暂无来自砖头机的未读日记卡片', '');
