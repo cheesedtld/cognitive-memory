@@ -577,51 +577,151 @@ globalThis.cogMemDelete = async function (id) {
 async function syncPush() {
     const charName = getCharName();
     if (!charName) { toastr.warning('请先打开角色聊天'); return; }
+
+    const userName = SillyTavern.getContext().name1 || 'User';
+    const characterName = SillyTavern.getContext().name2 || charName;
+
+    // 1. 获取聊天消息并找到上次节点
+    let messages = [];
+    if (typeof getChatMessages === 'function') {
+        const lastId = typeof getLastMessageId === 'function' ? getLastMessageId() : 0;
+        messages = getChatMessages(`0-${lastId}`);
+    }
+    if (!messages || messages.length === 0) { toastr.warning('当前聊天没有消息'); return; }
+
+    let startIndex = 0;
+    for (let i = messages.length - 1; i >= 0; i--) {
+        const msgText = messages[i].message || '';
+        if (msgText.includes('正式切换为线下见面/现实互动模式') || msgText.includes('已同步到砖头机：线下记忆摘要')) {
+            startIndex = i + 1;
+            break;
+        }
+    }
+    messages = messages.slice(startIndex);
+    if (messages.length === 0) { setActionStatus('上次同步后暂无新内容', ''); return; }
+
+    let chatText = '';
+    messages.forEach(msg => {
+        const sender = msg.is_user ? userName : characterName;
+        const content = (msg.message || '').substring(0, 800);
+        chatText += `${sender}: ${content}\n`;
+    });
+    if (chatText.length > 25000) chatText = '...(前面的内容已省略)\n' + chatText.slice(-25000);
+
+    const summaryPrompt = `你是一个情感细腻的故事记录者。请仔细阅读以下两人之间的对话记录，并为他们提取一份充满人情味、画面感和情感张力的“记忆档案”。
+
+【重要写作红线 - 绝对禁止】
+1. 拒绝机械化报告Tone：严禁使用“在这段对话中”、“展现了”、“说明了”、“用户与角色”、“产生互动”等冰冷的、上帝视角的分析式套话。
+2. 拒绝“AI味”专有名词：严禁出现“羁绊”、“情感共鸣”、“灵魂交织”、“宿命感”、“情感升温”、“拉扯”等泛滥且油腻的AI总结词汇。
+3. 称呼自然：直接使用名字“${userName}”和“${characterName}”，绝对不要使用“用户”、“玩家”、“角色”、“AI”等出戏称呼。
+
+【写作指引】
+沉浸式回忆：请用像写小说设定集。细腻地捕捉两人之间的情绪流动、空气中的温度，以及那些没有明说的心思。让文字能够真实触动人心。
+
+对话内容：
+${chatText}
+
+请按照以下格式输出你的档案：
+
+【剧情总结】
+(抛弃干瘪的流水账，用细腻柔和、充满情感温度的语言，回顾两人这段时间共同经历的故事脉络。重点描绘他们之间发生的特殊事件、关键抉择以及两人内心情绪。1000字左右。)
+
+【当前关系状态】
+(请用一两句话精准概括当下微妙的心理距离。例如：${userName} & ${characterName}：正处于患得患失的暧昧期，彼此试探却又忍不住向对方靠近。)
+
+【关键记忆碎片】
+(按时间顺序，像幻灯片一样，列举出几幕推动两人关系发展的具体事件画面。写出当时的情境氛围和彼此的心情。)
+
+【时间跨度】
+(记录这段经历的具体或大致时间跨度。)
+
+【言外之意与暗线】
+(记录那些欲言又止的细节、未解开的心结、伏笔。)
+
+【情感信物】
+(如果有提及，描述具有特殊情感意义的物品、互送的礼物或某个承载回忆的地点，并说明它对两人意味着什么。若无则简要注明即可。)
+
+只输出以上六个板块的内容，千万不要添加开头和结尾的额外寒暄说明文字。`;
+
     try {
-        const data = await apiCall(`/memories?chatTag=${encodeURIComponent(getChatTag())}&sort=created&limit=200`);
-        const count = data?.memories?.length || 0;
-        setActionStatus(`认知记忆库有 ${count} 条，砖头机可通过「从酒馆拉取」获取`, 'success');
-    } catch (e) { setActionStatus(`❌ ${e.message}`, 'error'); }
+        toastr.info('正在生成酒馆总结，请稍候...', '主动向量记忆');
+        const summary = await window.generateRaw({
+            user_input: summaryPrompt,
+            should_silence: true,
+            max_chat_history: 0,
+            max_tokens: 4096,
+            ordered_prompts: ['user_input']
+        });
+
+        if (!summary || !summary.trim()) throw new Error('摘要生成失败：返回为空');
+
+        const memoryEntry = {
+            id: 'card_st_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+            text: summary.trim(),
+            source: 'st',
+            timestamp: Date.now(),
+            isCore: true
+        };
+
+        // 2. 推送到后端
+        await apiCall('/sync/push', {
+            method: 'POST',
+            body: { chatTag: `chat:${getCharName()}`, source: 'st', memories: [memoryEntry] }
+        });
+
+        // 3. 插入本地聊天流
+        const summaryMessage = `<details>\n<summary>📱 <b>已同步到砖头机：线下记忆摘要</b></summary>\n\n${summary.trim()}\n\n</details>\n\n*(系统提示：以上线下互动记忆已同步至砖头机，线上聊天时角色会自然地体现对这些经历的了解。)*`;
+        if (typeof createChatMessages === 'function') {
+            await createChatMessages([{ role: 'system', message: summaryMessage }]);
+        }
+
+        setActionStatus(`✅ 成功生成剧情总结并推送！`, 'success');
+    } catch (e) {
+        setActionStatus(`❌ ${e.message}`, 'error');
+    }
 }
 
 async function syncPull() {
     const charName = getCharName();
     if (!charName) { toastr.warning('请先打开角色聊天'); return; }
     try {
-        // 将全局的砖头机记忆分配给当前聊天
-        const targetChatTag = getChatTag();
-        const sourceChatTag = `chat:${charName}`;
-        const data = await apiCall(`/sync/claim`, {
-            method: 'POST',
-            body: { sourceChatTag, targetChatTag }
-        });
-        const count = data?.count || 0;
-        if (count === 0) {
-            setActionStatus('全局库暂无未分配的砖头机记忆', '');
-        } else {
-            setActionStatus(`✅ 成功将 ${count} 条砖头机记忆拉入本聊天！`, 'success');
+        // 从后端拉取砖头机产生的 card_ztj_ 记录
+        const syncChatTag = `chat:${charName}`;
+        const data = await apiCall(`/memories?chatTag=${encodeURIComponent(syncChatTag)}&limit=1000`);
+        const cards = (data?.memories || []).filter(m => m.id && m.id.startsWith('card_ztj_') && !m.isArchived);
+
+        if (cards.length === 0) {
+            setActionStatus('暂无来自砖头机的新事件日记', '');
+            return;
         }
+
+        // 整理为一条前情提要消息
+        let injectContent = '<details>\n<summary>📱 <b>点击展开：从砖头机同步的前情提要（近3条日记）</b></summary>\n\n';
+
+        // 取最近三条用于展示，并将所有拉取到的都标记为已读避免重复拉取
+        for (const mem of cards) {
+            await apiCall(`/memories/${encodeURIComponent(mem.id)}`, { method: 'PUT', body: { isArchived: true } });
+        }
+
+        const displayCards = cards
+            .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+            .slice(0, 3)
+            .reverse();
+
+        for (const [i, mem] of displayCards.entries()) {
+            injectContent += `[事件日记 ${i + 1}]\n${mem.text || ''}\n\n`;
+        }
+        injectContent += '</details>\n\n*(系统提示：以上是近三天砖头机线下的事件日记背景，请结合这些线索，自然流畅地展开接下来的剧情。)*';
+
+        if (typeof createChatMessages === 'function') {
+            await createChatMessages([{ role: 'system', message: injectContent }]);
+        }
+
+        setActionStatus(`✅ 成功拉取 ${cards.length} 条砖头机事件日记并插入背景！`, 'success');
         refreshStats();
     } catch (e) { setActionStatus(`❌ ${e.message}`, 'error'); }
 }
 
-async function syncClearZtj() {
-    const charName = getCharName();
-    if (!charName) { toastr.warning('请先打开角色聊天'); return; }
-    try {
-        const data = await apiCall(`/sync/clearztj`, {
-            method: 'DELETE',
-            body: { chatTag: getChatTag() }
-        });
-        const count = data?.count || 0;
-        if (count === 0) {
-            setActionStatus('本聊天没有砖头机拉取的记忆', '');
-        } else {
-            setActionStatus(`🗑️ 成功撤销了 ${count} 条本聊天的砖头机记忆！`, 'success');
-        }
-        refreshStats();
-    } catch (e) { setActionStatus(`❌ ${e.message}`, 'error'); }
-}
 
 // ============ 调试检测 ============
 function setDiagStatus(id, text, cls) {
@@ -807,264 +907,13 @@ async function refreshStats() {
 
 // ============ UI ↔ Settings 双向绑定 ============
 function populateUI() {
-    const s = getSettings();
-    const set = (id, prop, val) => {
-        const e = document.getElementById(id);
-        if (!e) return;
-        if (prop === 'checked') e.checked = val;
-        else e.value = val;
-    };
-
-    set('cogmem_enabled', 'checked', s.enabled);
-    set('cogmem_auto_index', 'checked', s.autoIndex);
-    set('cogmem_auto_inject', 'checked', s.autoInject);
-    set('cogmem_emb_endpoint', 'value', s.embEndpoint);
-    set('cogmem_emb_key', 'value', s.embKey);
-    set('cogmem_emb_model', 'value', s.embModel);
-    set('cogmem_score_endpoint', 'value', s.scoreEndpoint);
-    set('cogmem_score_key', 'value', s.scoreKey);
-    set('cogmem_score_model', 'value', s.scoreModel);
-    set('cogmem_topk', 'value', s.topK);
-    set('cogmem_chunk_msgs', 'value', s.chunkMsgs);
-    set('cogmem_keep_recent', 'value', s.keepRecent);
-    set('cogmem_custom_tag_start', 'value', s.customTagStart || '');
-    set('cogmem_custom_tag_end', 'value', s.customTagEnd || '');
-    set('cogmem_tag_threshold', 'value', s.tagExtractThreshold ?? 300);
-
-    set('cogmem_w_relevance', 'value', s.wRelevance);
-    set('cogmem_w_recency', 'value', s.wRecency);
-    set('cogmem_w_importance', 'value', s.wImportance);
-    set('cogmem_decay_rate', 'value', s.decayRate);
-
-
-    set('cogmem_inject_depth', 'value', s.injectDepth);
-    // 设置单选按钮
-    const radios = document.querySelectorAll('input[name="cogmem_inject_pos"]');
-    radios.forEach(r => { r.checked = r.value === s.injectPosition; });
+    // 界面已极简为“剧情驿站”卡片化同步，不再需要复杂的参数配置。
 }
 
 function bindEvents() {
-    const s = getSettings();
-    const bindVal = (id, key, transform = v => v) => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.addEventListener('change', () => { s[key] = transform(el.type === 'checkbox' ? el.checked : el.value); saveSettings(); });
-        if (el.type === 'text' || el.type === 'password' || el.type === 'number') {
-            el.addEventListener('input', () => { s[key] = transform(el.value); saveSettings(); });
-        }
-    };
-
-    bindVal('cogmem_enabled', 'enabled');
-    bindVal('cogmem_auto_index', 'autoIndex');
-    bindVal('cogmem_auto_inject', 'autoInject');
-    bindVal('cogmem_emb_endpoint', 'embEndpoint', v => v.trim());
-    bindVal('cogmem_emb_key', 'embKey', v => v.trim());
-    bindVal('cogmem_emb_model', 'embModel', v => v.trim());
-    bindVal('cogmem_score_endpoint', 'scoreEndpoint', v => v.trim());
-    bindVal('cogmem_score_key', 'scoreKey', v => v.trim());
-    bindVal('cogmem_score_model', 'scoreModel', v => v.trim());
-    bindVal('cogmem_topk', 'topK', v => parseInt(v) || 5);
-    bindVal('cogmem_chunk_msgs', 'chunkMsgs', v => Math.max(1, parseInt(v) || 5));
-    bindVal('cogmem_keep_recent', 'keepRecent', v => parseInt(v) || 10);
-    bindVal('cogmem_custom_tag_start', 'customTagStart', v => v.trim());
-    bindVal('cogmem_custom_tag_end', 'customTagEnd', v => v.trim());
-    bindVal('cogmem_tag_threshold', 'tagExtractThreshold', v => Math.max(0, parseInt(v) || 300));
-
-    // 权重 / 衰减（已改为数字输入）
-    bindVal('cogmem_w_relevance', 'wRelevance', v => Math.max(0, Math.min(100, parseInt(v) || 0)));
-    bindVal('cogmem_w_recency', 'wRecency', v => Math.max(0, Math.min(100, parseInt(v) || 0)));
-    bindVal('cogmem_w_importance', 'wImportance', v => Math.max(0, Math.min(100, parseInt(v) || 0)));
-    bindVal('cogmem_decay_rate', 'decayRate', v => Math.max(0, Math.min(100, parseInt(v) || 0)));
-
-    // 注入位置
-    const radios = document.querySelectorAll('input[name="cogmem_inject_pos"]');
-    radios.forEach(r => {
-        r.addEventListener('change', () => { s.injectPosition = r.value; saveSettings(); });
-    });
-    const depthEl = document.getElementById('cogmem_inject_depth');
-    if (depthEl) {
-        depthEl.addEventListener('input', () => { s.injectDepth = parseInt(depthEl.value) || 2; saveSettings(); });
-    }
-
     // 按钮
-    document.getElementById('cogmem_btn_full_index')?.addEventListener('click', fullIndexCurrentChat);
-    document.getElementById('cogmem_btn_browse')?.addEventListener('click', openMemoryBrowser);
     document.getElementById('cogmem_btn_sync_push')?.addEventListener('click', syncPush);
     document.getElementById('cogmem_btn_sync_pull')?.addEventListener('click', syncPull);
-    document.getElementById('cogmem_btn_sync_undo')?.addEventListener('click', syncClearZtj);
-    document.getElementById('cogmem_btn_diag')?.addEventListener('click', diagSearch);
-
-    // 诊断按钮
-    document.getElementById('cogmem_btn_run_diag')?.addEventListener('click', runFullDiag);
-    document.getElementById('cogmem_diag_plugin')?.addEventListener('click', () => { diagClear(); diagTestPlugin(); });
-    document.getElementById('cogmem_diag_emb')?.addEventListener('click', () => { diagClear(); diagTestEmbedding(); });
-    document.getElementById('cogmem_diag_llm')?.addEventListener('click', () => { diagClear(); diagTestScoring(); });
-    document.getElementById('cogmem_diag_db')?.addEventListener('click', () => { diagClear(); diagTestDB(); });
-
-    // 拉取 API 设置按钮 (从输入的 Endpoint 获取模型列表)
-    document.getElementById('cogmem_btn_pull_emb')?.addEventListener('click', async () => {
-        try {
-            const eEl = document.getElementById('cogmem_emb_endpoint');
-            const kEl = document.getElementById('cogmem_emb_key');
-            let endpoint = (eEl?.value || '').trim();
-            const key = (kEl?.value || '').trim();
-
-            if (!endpoint) { toastr.warning('请先输入 Embedding API 地址'); return; }
-            if (endpoint.endsWith('/v1/chat/completions') || endpoint.endsWith('/v1/embeddings')) {
-                endpoint = endpoint.replace(/\/(chat\/completions|embeddings)$/, '');
-            }
-            if (endpoint.endsWith('/v1')) {
-                endpoint = endpoint.replace(/\/v1$/, '');
-            }
-
-            const originalBtnText = document.getElementById('cogmem_btn_pull_emb').innerHTML;
-            document.getElementById('cogmem_btn_pull_emb').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 拉取中...';
-
-            try {
-                const res = await fetch(`${endpoint}/v1/models`, {
-                    headers: { 'Authorization': `Bearer ${key}` }
-                });
-
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const data = await res.json();
-
-                const models = Array.isArray(data) ? data : (data.data || []);
-                const datalist = document.getElementById('cogmem_emb_model_list');
-                if (datalist) {
-                    datalist.innerHTML = '';
-                    models.forEach(m => {
-                        const id = m.id || m.name || m;
-                        if (typeof id === 'string') {
-                            const option = document.createElement('option');
-                            option.value = id;
-                            datalist.appendChild(option);
-                        }
-                    });
-
-                    // 自动选择第一个，或者清空后聚焦以唤起下拉
-                    const inputEl = document.getElementById('cogmem_emb_model');
-                    if (inputEl) {
-                        inputEl.focus();
-                        inputEl.value = '';
-                        // 触发 input 事件以保存设置（清空值）
-                        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
-                    }
-                }
-                toastr.success(`成功拉取 ${models.length} 个模型，请双击或点击输入框查看`);
-            } finally {
-                document.getElementById('cogmem_btn_pull_emb').innerHTML = originalBtnText;
-            }
-        } catch (e) { toastr.error(`拉取模型失败: ${e.message}`); }
-    });
-
-    document.getElementById('cogmem_btn_pull_score')?.addEventListener('click', async () => {
-        try {
-            const eEl = document.getElementById('cogmem_score_endpoint');
-            const kEl = document.getElementById('cogmem_score_key');
-
-            let endpoint = (eEl?.value || '').trim();
-            const key = (kEl?.value || '').trim();
-
-            if (!endpoint) {
-                // 如果为空，尝试使用 Embedding 的地址
-                endpoint = (document.getElementById('cogmem_emb_endpoint')?.value || '').trim();
-                if (!endpoint) {
-                    toastr.warning('请先输入评估 LLM (或 Embedding) API 地址'); return;
-                }
-            }
-
-            if (endpoint.endsWith('/v1/chat/completions') || endpoint.endsWith('/v1/embeddings')) {
-                endpoint = endpoint.replace(/\/(chat\/completions|embeddings)$/, '');
-            }
-            if (endpoint.endsWith('/v1')) {
-                endpoint = endpoint.replace(/\/v1$/, '');
-            }
-
-            const reqKey = key || (document.getElementById('cogmem_emb_key')?.value || '').trim();
-
-            const originalBtnText = document.getElementById('cogmem_btn_pull_score').innerHTML;
-            document.getElementById('cogmem_btn_pull_score').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 拉取中...';
-
-            try {
-                const res = await fetch(`${endpoint}/v1/models`, {
-                    headers: { 'Authorization': `Bearer ${reqKey}` }
-                });
-
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const data = await res.json();
-
-                const models = Array.isArray(data) ? data : (data.data || []);
-                const datalist = document.getElementById('cogmem_score_model_list');
-                if (datalist) {
-                    datalist.innerHTML = '';
-                    models.forEach(m => {
-                        const id = m.id || m.name || m;
-                        if (typeof id === 'string') {
-                            const option = document.createElement('option');
-                            option.value = id;
-                            datalist.appendChild(option);
-                        }
-                    });
-
-                    const inputEl = document.getElementById('cogmem_score_model');
-                    if (inputEl) {
-                        inputEl.focus();
-                        inputEl.value = '';
-                        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
-                    }
-                }
-                toastr.success(`成功拉取 ${models.length} 个模型，请双击或点击输入框查看`);
-            } finally {
-                document.getElementById('cogmem_btn_pull_score').innerHTML = originalBtnText;
-            }
-        } catch (e) { toastr.error(`拉取模型失败: ${e.message}`); }
-    });
-
-    // 保存到服务端
-    document.getElementById('cogmem_btn_save')?.addEventListener('click', async () => {
-        try {
-            await apiCall('/settings', {
-                method: 'POST',
-                body: {
-                    chatTag: getChatTag(),
-                    embeddingEndpoint: s.embEndpoint,
-                    embeddingKey: s.embKey,
-                    embeddingModel: s.embModel,
-                    scoringEndpoint: s.scoreEndpoint,
-                    scoringKey: s.scoreKey,
-                    scoringModel: s.scoreModel,
-                    weightRelevance: s.wRelevance / 100,
-                    weightRecency: s.wRecency / 100,
-                    weightImportance: s.wImportance / 100,
-                    decayRate: s.decayRate / 100,
-                    topK: s.topK,
-                },
-            });
-            toastr.success('设置已保存到服务端');
-        } catch (e) {
-            toastr.error(`保存失败: ${e.message}`);
-        }
-    });
-
-    // 也保存全局设置（无 chatTag）
-    document.getElementById('cogmem_btn_save')?.addEventListener('dblclick', async () => {
-        try {
-            await apiCall('/settings', {
-                method: 'POST',
-                body: {
-                    embedding_endpoint: s.embEndpoint,
-                    embedding_key: s.embKey,
-                    embedding_model: s.embModel,
-                    scoring_endpoint: s.scoreEndpoint,
-                    scoring_key: s.scoreKey,
-                    scoring_model: s.scoreModel,
-                },
-            });
-            toastr.success('全局默认设置已保存');
-        } catch (e) {
-            toastr.error(`保存失败: ${e.message}`);
-        }
-    });
 }
 
 // ============ 初始化 ============
